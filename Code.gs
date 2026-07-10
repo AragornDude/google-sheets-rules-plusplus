@@ -12,7 +12,6 @@ function onInstall(e) {
   onOpen(e);
 }
 
-// UPDATED: Now uses createTemplateFromFile instead of createHtmlOutputFromFile
 function showSidebar() {
   const html = HtmlService.createTemplateFromFile('Sidebar')
     .evaluate()
@@ -20,11 +19,9 @@ function showSidebar() {
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
-// NEW: Helper function to inject other HTML/CSS files into the template
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
-
 
 function createInstallableTrigger() {
   const sheet = SpreadsheetApp.getActive();
@@ -98,6 +95,17 @@ function getActiveSheetName() {
   return SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().getName();
 }
 
+// Helper: Converts a 1-based column index to A1 notation letters (e.g., 3 -> "C")
+function columnToLetter(column) {
+  let temp, letter = '';
+  while (column > 0) {
+    temp = (column - 1) % 26;
+    letter = String.fromCharCode(temp + 65) + letter;
+    column = (column - temp - 1) / 26;
+  }
+  return letter;
+}
+
 // --- 3. THE EVALUATION ENGINE ---
 
 function processEdits(e) {
@@ -106,7 +114,6 @@ function processEdits(e) {
   const sheet = e.range.getSheet();
   const sheetName = sheet.getName();
   
-  // Get the full boundaries of the edit (handles multi-cell pastes/deletions)
   const editStartRow = e.range.getRow();
   const editEndRow = editStartRow + e.range.getNumRows() - 1;
   const editStartCol = e.range.getColumn();
@@ -125,14 +132,10 @@ function processEdits(e) {
     const ruleStartCol = detRangeObj.getColumn();
     const ruleEndCol = detRangeObj.getLastColumn();
     
-    // Check if the edited block intersects with this rule's column range
     if (editStartCol <= ruleEndCol && editEndCol >= ruleStartCol) {
-      
-      // Calculate the exact rows where the edit and the rule overlap
       const startOverlap = Math.max(editStartRow, ruleStartRow);
       const endOverlap = Math.min(editEndRow, ruleEndRow);
       
-      // Loop through ONLY the overlapping rows
       for (let r = startOverlap; r <= endOverlap; r++) {
         evaluateRuleForRow(sheet, rule, r, ruleStartCol, ruleEndCol);
       }
@@ -140,7 +143,6 @@ function processEdits(e) {
   });
 }
 
-// Fallback manual function triggered from the Sidebar
 function forceRecalculate() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   const sheetName = sheet.getName();
@@ -168,7 +170,6 @@ function forceRecalculate() {
   return appliedRulesCount;
 }
 
-// The core brain: evaluates a specific rule on a specific row
 function evaluateRuleForRow(sheet, rule, editRow, startCol, endCol) {
   const rowDetectionRange = sheet.getRange(editRow, startCol, 1, (endCol - startCol) + 1);
   const rowValues = rowDetectionRange.getValues()[0];
@@ -185,6 +186,8 @@ function evaluateRuleForRow(sheet, rule, editRow, startCol, endCol) {
   const currentTargetValue = targetCell.getValue();
   
   let fillValue = "";
+  let isFormula = false; // Flag to determine how we write to the cell
+  
   switch (rule.fillType) {
     case 'Date': fillValue = new Date(); break;
     case 'Static': fillValue = rule.staticTextValue || ""; break;
@@ -193,12 +196,22 @@ function evaluateRuleForRow(sheet, rule, editRow, startCol, endCol) {
     case 'Checkbox': fillValue = true; break; 
     case 'CopyCol': 
       if (rule.copyColIndex) {
-         fillValue = sheet.getRange(editRow, parseInt(rule.copyColIndex)).getValue();
+         // Create a dynamic formula like "=C5"
+         const colLetter = columnToLetter(parseInt(rule.copyColIndex));
+         fillValue = "=" + colLetter + editRow;
+         isFormula = true;
       }
       break;
   }
   
   const applyFill = (val) => {
+    // STATE PROTECTION: Do not overwrite existing Dates/UUIDs unless the rule demands constant updates
+    if ((rule.fillType === 'Date' || rule.fillType === 'UUID') && currentTargetValue !== "") {
+      if (rule.detectionType !== "Fill and Update" && rule.detectionType !== "Fill on Any Edit") {
+        return; // Break out of the function, leaving the cell exactly as it is
+      }
+    }
+
     const dv = targetCell.getDataValidation();
     if (rule.fillType === 'Checkbox') {
       if (!dv || dv.getCriteriaType() !== SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
@@ -209,7 +222,13 @@ function evaluateRuleForRow(sheet, rule, editRow, startCol, endCol) {
       if (dv && dv.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
         targetCell.clearDataValidations();
       }
-      targetCell.setValue(val);
+      
+      // Inject formula if CopyCol, otherwise inject raw value
+      if (isFormula) {
+        targetCell.setFormula(val);
+      } else {
+        targetCell.setValue(val);
+      }
     }
   };
   
