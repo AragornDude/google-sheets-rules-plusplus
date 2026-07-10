@@ -1,0 +1,265 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500&family=Roboto:wght@400;500&display=swap');
+
+  body {
+    font-family: 'Roboto', Arial, sans-serif;
+    color: #3c4043;
+    margin: 0;
+    padding: 16px;
+    background-color: #ffffff;
+    font-size: 14px;
+  }
+
+  h3 {
+    font-family: 'Google Sans', sans-serif;
+    color: #202124;
+    font-weight: 500;
+    font-size: 16px;
+    margin-top: 0;
+    margin-bottom: 16px;
+  }
+
+  /* --- BUTTONS (Native Hairline Style) --- */
+  button {
+    background-color: #ffffff; 
+    color: #188038; 
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-family: 'Google Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, box-shadow 0.2s, border-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  
+  button:hover {
+    background-color: #f8f9fa;
+    border-color: #188038;
+  }
+  
+  button:active {
+    background-color: #e6f4ea;
+  }
+  
+  button:disabled {
+    background-color: #f1f3f4;
+    color: #a8aab3;
+    cursor: not-allowed;
+    border-color: #f1f3f4;
+  }
+
+  button.primary {
+    background-color: #188038;
+    color: white;
+    border: 1px solid #188038;
+  }
+  
+  button.primary:hover {
+    background-color: #137333;
+    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
+  }
+
+  /*button.action-btn {
+    color: #202124;
+    border-color: #dadce0;
+  }
+  button.action-btn:hover {
+    background-color: #f8f9fa;
+    border-color: #fbbc04;
+    color: #b07d00;
+  }*/
+
+  /* --- INPUTS & SELECTS --- */
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: #5f6368;
+    margin-bottom: 4px;
+  }
+  
+  input[type="text"], input[type="number"], select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-family: 'Roboto', sans-serif;
+    font-size: 14px;
+    color: #202124;
+    background-color: #fff;
+    transition: border-color 0.2s;
+  }
+  
+  input[type="text"]:focus, input[type="number"]:focus, select:focus {
+    outline: none;
+    border-color: #188038;
+    border-width: 2px;
+    padding: 7px; 
+  }
+
+  /* --- DATA VALIDATION NATIVE PILL STYLE --- */
+  .rule-pill {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    background-color: #fff;
+    transition: background-color 0.15s, border-color 0.15s;
+    position: relative;
+    min-height: 48px;
+    cursor: pointer; /* Makes it obvious the whole card is clickable */
+  }
+  
+  .rule-pill:hover {
+    background-color: #f8f9fa;
+  }
+
+  .rule-pill-core {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-grow: 1;
+    overflow: hidden;
+  }
+
+  .rule-pill-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .rule-condition {
+    color: #202124;
+    font-size: 13px;
+    font-weight: 400;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .rule-scope {
+    color: #5f6368;
+    font-size: 11px;
+  }
+
+  .rule-range-badge {
+    background-color: #f1f3f4;
+    color: #3c4043;
+    font-family: 'Roboto', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 12px;
+    border: 1px solid #dadce0;
+    white-space: nowrap;
+  }
+
+  /* Hover Actions Menu */
+  .rule-actions {
+    display: none; 
+    gap: 4px;
+    background-color: #f8f9fa; 
+    padding-left: 8px;
+  }
+
+  .rule-pill:hover .rule-actions {
+    display: flex;
+  }
+  .rule-pill:hover .rule-range-badge {
+    display: none; 
+  }
+
+  /* Circular icon-style buttons */
+  .rule-actions button {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    padding: 0;
+    margin: 0;
+    font-size: 14px;
+    border-color: transparent;
+    color: #5f6368;
+    background-color: transparent;
+  }
+  
+  .rule-actions button:hover {
+    background-color: #e8eaed;
+    color: #202124;
+  }
+
+  .rule-actions button.del-btn:hover {
+    color: #d93025;
+    background-color: #fce8e6;
+  }
+
+  /* Custom Toggle Switch (Native look) */
+  input[type="checkbox"].toggle {
+    appearance: none;
+    width: 32px;
+    height: 18px;
+    background-color: #dadce0;
+    border-radius: 9px;
+    position: relative;
+    cursor: pointer;
+    outline: none;
+    flex-shrink: 0;
+  }
+  input[type="checkbox"].toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  input[type="checkbox"].toggle:checked {
+    background-color: #188038;
+  }
+  input[type="checkbox"].toggle:checked::after {
+    left: 16px;
+  }
+
+  /* --- LAYOUT UTILS --- */
+  .form-group {
+    margin-bottom: 16px;
+  }
+  
+  hr {
+    border: 0;
+    border-top: 1px solid #dadce0;
+    margin: 16px 0;
+  }
+  
+  #status {
+    font-size: 12px;
+    color: #188038;
+    font-weight: 500;
+    text-align: center;
+    height: 16px;
+    margin-top: 16px;
+  }
+  
+  .flex-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  
+  .flex-row button {
+    flex: 1;
+    margin-bottom: 0;
+  }
+</style>
