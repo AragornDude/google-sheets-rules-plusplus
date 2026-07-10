@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= include('Stylesheet'); ?>
+  </head>
+  <body>
+    <div id="listView">
+
+      <div id="ruleListContainer">Loading rules...</div>
+      
+      <button style="width: 100%; margin-bottom: 16px;" onclick="showForm()">
+        <span style="font-size: 18px; margin-right: 4px;">+</span> Add rule
+      </button>
+
+      <div class="flex-row">
+        <button onclick="loadRules()" title="Refresh View">Refresh List</button>
+        <button class="action-btn" onclick="triggerRecalculate(event)">Recalculate Sheet</button>
+      </div>
+      
+      <div class="flex-row">
+        <button onclick="exportRules()">Export JSON</button>
+        <button onclick="importRules()">Import JSON</button>
+      </div>
+    </div>
+
+    <div id="formView" style="display: none;">
+      <h3 id="formTitle">Create/Edit Rule</h3>
+      <input type="hidden" id="ruleId">
+
+      <div class="form-group">
+        <label>Apply To:</label>
+        <select id="sheetScope">
+          <option value="All Sheets">All Sheets</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Fill Type</label>
+        <select id="fillType" onchange="toggleConditionalInputs()">
+          <option value="Date">Date (Timestamp)</option>
+          <option value="Static">Static Text/Number</option>
+          <option value="Email">Editor's Email</option>
+          <option value="UUID">Unique ID (UUID)</option>
+          <option value="Checkbox">Insert Checkbox</option>
+          <option value="CopyCol">Copy From Column #</option>
+        </select>
+      </div>
+      
+      <div class="form-group" id="staticTextInputBox" style="display:none;">
+        <label>Text to Insert:</label>
+        <input type="text" id="staticTextValue" placeholder="e.g., Completed">
+      </div>
+      <div class="form-group" id="copyColInputBox" style="display:none;">
+        <label>Column Number to Copy (e.g. 1 for A):</label>
+        <input type="number" id="copyColIndex" placeholder="1">
+      </div>
+
+      <div class="form-group">
+        <label>Fill Range (Target)</label>
+        <input type="text" id="fillRange" placeholder="e.g., A2:A">
+      </div>
+      
+      <div class="form-group">
+        <label>Detection Range</label>
+        <input type="text" id="detectionRange" placeholder="e.g., C2:E">
+      </div>
+
+      <div class="form-group">
+        <label>Detection Type</label>
+        <select id="detectionType" onchange="toggleConditionalInputs()">
+          <option value="Fill and Update">Fill and Update</option>
+          <option value="Fill When Full">Fill When Full</option>
+          <option value="Fill When Full, Clear when Empty">Fill When Full, Clear when Empty</option>
+          <option value="Fill Once">Fill Once</option>
+          <option value="Fill on Any Edit">Fill on Any Edit</option>
+          <option value="Specific Value Match">Specific Value Match</option>
+          <option value="Is Checked">Is Checked (Checkbox)</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="targetValueBox" style="display:none;">
+        <label>Target Match Value:</label>
+        <input type="text" id="targetValue" placeholder="e.g., Done">
+      </div>
+      
+      <hr>
+
+      <div class="flex-row">
+        <button class="primary" onclick="submitRule()">Done</button>
+        <button onclick="showList()">Cancel</button>
+      </div>
+    </div>
+
+    <p id="status"></p>
+
+    <script>
+      let currentRules = [];
+      let currentSheetName = "";
+
+      window.onload = () => {
+        google.script.run.withSuccessHandler(name => {
+          currentSheetName = name;
+          loadRules();
+          setInterval(pollActiveSheet, 2000);
+        }).getActiveSheetName();
+      };
+
+      function pollActiveSheet() {
+        google.script.run.withSuccessHandler(name => {
+          if (name !== currentSheetName) {
+            currentSheetName = name;
+            renderRules(currentRules); 
+            const scopeSelect = document.getElementById('sheetScope');
+            if (scopeSelect && scopeSelect.options.length > 1) {
+              scopeSelect.options[1].value = currentSheetName;
+              scopeSelect.options[1].text = `This Sheet (${currentSheetName})`;
+            }
+          }
+        }).getActiveSheetName();
+      }
+
+      function setStatus(msg) {
+        document.getElementById('status').innerText = msg;
+        setTimeout(() => document.getElementById('status').innerText = "", 3000);
+      }
+
+      function loadRules() {
+        document.getElementById('ruleListContainer').innerHTML = "<p style='color:#5f6368; text-align:center;'>Loading rules...</p>";
+        google.script.run.withSuccessHandler(name => {
+          currentSheetName = name;
+          google.script.run.withSuccessHandler(renderRules).getRules();
+        }).getActiveSheetName();
+      }
+
+      function renderRules(rules) {
+        currentRules = rules;
+        const container = document.getElementById('ruleListContainer');
+        container.innerHTML = "";
+
+        const visibleRules = rules.filter(r => r.sheetScope === 'All Sheets' || r.sheetScope === currentSheetName);
+
+        if (visibleRules.length === 0) {
+          container.innerHTML = `<p style="color:#5f6368; text-align:center; margin-top:20px;"><em>No rules configured for '${currentSheetName}'.</em></p>`;
+          return;
+        }
+
+        visibleRules.forEach(rule => {
+          const isEnabled = rule.enabled !== false; 
+          
+          let conditionText = rule.detectionType;
+          if (rule.detectionType === 'Specific Value Match') conditionText += `: "${rule.targetValue}"`;
+
+          const ruleDiv = document.createElement('div');
+          ruleDiv.className = 'rule-pill';
+          
+          // NEW: The entire card triggers the edit screen
+          ruleDiv.onclick = () => editRule(rule.id);
+          
+          ruleDiv.innerHTML = `
+            <div class="rule-pill-core">
+              <input type="checkbox" class="toggle" title="Enable/Disable Rule" ${isEnabled ? 'checked' : ''} 
+                onclick="event.stopPropagation();" 
+                onchange="toggleRule('${rule.id}', this.checked)">
+              
+              <div class="rule-pill-text">
+                <span class="rule-condition" title="${conditionText}">${conditionText}</span>
+                <span class="rule-scope">${rule.sheetScope} • Source: ${rule.detectionRange}</span>
+              </div>
+            </div>
+
+            <div class="rule-range-badge">${rule.fillRange}</div>
+            
+            <div class="rule-actions">
+              <button onclick="event.stopPropagation(); cloneRule('${rule.id}')" title="Clone">⧉</button>
+              <button class="del-btn" onclick="event.stopPropagation(); deleteRule('${rule.id}')" title="Delete">🗑</button>
+            </div>
+          `;
+          container.appendChild(ruleDiv);
+        });
+      }
+
+      function toggleRule(id, isEnabled) {
+        google.script.run.toggleRule(id, isEnabled);
+      }
+
+      function toggleConditionalInputs() {
+        const fType = document.getElementById('fillType').value;
+        const dType = document.getElementById('detectionType').value;
+        
+        document.getElementById('staticTextInputBox').style.display = (fType === 'Static') ? 'block' : 'none';
+        document.getElementById('copyColInputBox').style.display = (fType === 'CopyCol') ? 'block' : 'none';
+        document.getElementById('targetValueBox').style.display = (dType === 'Specific Value Match') ? 'block' : 'none';
+      }
+
+      function showList() {
+        document.getElementById('formView').style.display = 'none';
+        document.getElementById('listView').style.display = 'block';
+      }
+
+      function setupSheetScopeDropdown(selectedScope) {
+        const scopeSelect = document.getElementById('sheetScope');
+        scopeSelect.innerHTML = `<option value="All Sheets">All Sheets</option>`;
+        
+        const opt = document.createElement('option');
+        opt.value = currentSheetName;
+        opt.text = `This Sheet (${currentSheetName})`;
+        scopeSelect.appendChild(opt);
+
+        scopeSelect.value = selectedScope || 'All Sheets';
+      }
+
+      function showForm() {
+        document.getElementById('listView').style.display = 'none';
+        document.getElementById('formView').style.display = 'block';
+        document.getElementById('formTitle').innerText = "New Rule";
+        document.getElementById('ruleId').value = "";
+        
+        setupSheetScopeDropdown('All Sheets');
+
+        document.getElementById('fillType').value = "Date";
+        document.getElementById('fillRange').value = "";
+        document.getElementById('detectionRange').value = "";
+        document.getElementById('detectionType').value = "Fill and Update";
+        
+        document.getElementById('staticTextValue').value = "";
+        document.getElementById('copyColIndex').value = "";
+        document.getElementById('targetValue').value = "";
+        
+        toggleConditionalInputs();
+      }
+
+      function editRule(id) {
+        const rule = currentRules.find(r => r.id === id);
+        if (!rule) return;
+
+        document.getElementById('listView').style.display = 'none';
+        document.getElementById('formView').style.display = 'block';
+        document.getElementById('formTitle').innerText = "Edit Rule";
+        
+        document.getElementById('ruleId').value = rule.id;
+        setupSheetScopeDropdown(rule.sheetScope);
+
+        document.getElementById('fillType').value = rule.fillType;
+        document.getElementById('fillRange').value = rule.fillRange;
+        document.getElementById('detectionRange').value = rule.detectionRange;
+        document.getElementById('detectionType').value = rule.detectionType;
+        
+        document.getElementById('staticTextValue').value = rule.staticTextValue || "";
+        document.getElementById('copyColIndex').value = rule.copyColIndex || "";
+        document.getElementById('targetValue').value = rule.targetValue || "";
+
+        toggleConditionalInputs();
+      }
+
+      function cloneRule(id) {
+        const ruleToClone = currentRules.find(r => r.id === id);
+        if (!ruleToClone) return;
+        
+        const clonedRule = JSON.parse(JSON.stringify(ruleToClone));
+        delete clonedRule.id;
+        
+        setStatus("Cloning...");
+        google.script.run
+          .withSuccessHandler(() => {
+            setStatus("Rule cloned!");
+            loadRules();
+          })
+          .saveRule(clonedRule);
+      }
+
+      function getColumnCount(rangeStr) {
+        const lettersOnly = rangeStr.split('!').pop().replace(/[0-9]/g, '').toUpperCase();
+        const parts = lettersOnly.split(':');
+        if (parts.length === 1) return 1;
+        const colLetterToIndex = (letters) => {
+          let index = 0;
+          for (let i = 0; i < letters.length; i++) { index = index * 26 + letters.charCodeAt(i) - 64; }
+          return index;
+        };
+        const start = colLetterToIndex(parts[0]);
+        const end = colLetterToIndex(parts[1]);
+        return Math.abs(end - start) + 1;
+      }
+
+      function getStartRow(rangeStr) {
+        const firstPart = rangeStr.split('!').pop().split(':')[0]; 
+        const rowMatch = firstPart.match(/[0-9]+/); 
+        return rowMatch ? parseInt(rowMatch[0], 10) : 1; 
+      }
+
+      function getEndRow(rangeStr) {
+        const parts = rangeStr.split('!').pop().split(':');
+        if (parts.length === 1) {
+          const match = parts[0].match(/[0-9]+/);
+          return match ? parseInt(match[0], 10) : "bottom";
+        } else {
+          const match = parts[1].match(/[0-9]+/);
+          return match ? parseInt(match[0], 10) : "bottom";
+        }
+      }
+
+      function submitRule() {
+        let detRange = document.getElementById('detectionRange').value.trim();
+        let fillRange = document.getElementById('fillRange').value.trim();
+        const detType = document.getElementById('detectionType').value;
+        
+        const singleLetterRegex = /^[A-Za-z]+$/;
+        if (singleLetterRegex.test(detRange)) detRange = detRange.toUpperCase() + ":" + detRange.toUpperCase();
+        if (singleLetterRegex.test(fillRange)) fillRange = fillRange.toUpperCase() + ":" + fillRange.toUpperCase();
+
+        if (detType === "Specific Value Match") {
+          const colCount = getColumnCount(detRange);
+          if (colCount > 1) {
+            alert(`Error: 'Specific Value Match' only works with 1 column. Your range (${detRange}) spans ${colCount} columns.`);
+            return; 
+          }
+        }
+
+        const detStartRow = getStartRow(detRange);
+        const fillStartRow = getStartRow(fillRange);
+        if (detStartRow !== fillStartRow) {
+          alert(`Error: Starting rows must match.\n\nYour Fill Range starts at row ${fillStartRow}.\nYour Detection Range starts at row ${detStartRow}.`);
+          return;
+        }
+
+        const detEndRow = getEndRow(detRange);
+        const fillEndRow = getEndRow(fillRange);
+        if (detEndRow !== fillEndRow) {
+          const displayDet = detEndRow === "bottom" ? "the bottom of the sheet" : "row " + detEndRow;
+          const displayFill = fillEndRow === "bottom" ? "the bottom of the sheet" : "row " + fillEndRow;
+          alert(`Error: Ending rows must match.\n\nYour Fill Range ends at ${displayFill}.\nYour Detection Range ends at ${displayDet}.`);
+          return;
+        }
+
+        const rule = {
+          id: document.getElementById('ruleId').value,
+          enabled: true, 
+          sheetScope: document.getElementById('sheetScope').value,
+          fillType: document.getElementById('fillType').value,
+          fillRange: fillRange, 
+          detectionRange: detRange,
+          detectionType: detType,
+          staticTextValue: document.getElementById('staticTextValue').value,
+          copyColIndex: document.getElementById('copyColIndex').value,
+          targetValue: document.getElementById('targetValue').value
+        };
+
+        setStatus("Saving...");
+        google.script.run
+          .withSuccessHandler(() => {
+            setStatus("Saved successfully!");
+            showList();
+            loadRules();
+          })
+          .saveRule(rule);
+      }
+
+      function deleteRule(id) {
+        if (!confirm("Delete this rule?")) return;
+        setStatus("Deleting...");
+        google.script.run.withSuccessHandler(loadRules).deleteRule(id);
+      }
+
+      function exportRules() {
+        prompt("Copy your rules JSON below:", JSON.stringify(currentRules));
+      }
+
+      function importRules() {
+        const json = prompt("Paste your rules JSON here. WARNING: This will append to your current rules or overwrite matching IDs.");
+        if (!json) return;
+        setStatus("Importing...");
+        google.script.run
+          .withSuccessHandler((success) => {
+            if (success) {
+              setStatus("Import successful!");
+              loadRules();
+            } else {
+              alert("Invalid JSON format.");
+              setStatus("Import failed.");
+            }
+          })
+          .saveImportedRules(json);
+      }
+
+      function triggerRecalculate(event) {
+        if (!confirm("This will manually force an evaluation of all rules on the active sheet. On large sheets, this may take a moment. Proceed?")) return;
+        
+        setStatus("Recalculating... please wait.");
+        const btn = event.target;
+        btn.disabled = true;
+        
+        google.script.run
+          .withSuccessHandler((count) => {
+            if (count === 0) setStatus("No active rules found for this sheet.");
+            else setStatus("Recalculation complete!");
+            btn.disabled = false;
+          })
+          .forceRecalculate();
+      }
+    </script>
+  </body>
+</html>
