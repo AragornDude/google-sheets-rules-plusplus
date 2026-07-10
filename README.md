@@ -64,7 +64,8 @@ For the engine to track edits outside of the sidebar's active session, you must 
 5. Click **Save Rule**.
 
 If you make manual adjustments to the sheet layout or import a large dataset and need the rules to evaluate everything retroactively, click the **Recalculate Sheet** button in the sidebar. If too many edits are made in quick sucession, some may be lost, so this can be helpful
-**WARNING: Using the Recalculate Sheet button will potentially overwrite values, including timestamps and uuids, with current/new ones. I've written in some rudimentary checking for timestamps and uuids, where it shouldn't overwrite previous entries (unless the cell should be cleared), but I wouldn't use the feature on any mission critical data entry. It is always better to edit something again in the row that needs fixing, recalculating should be a last resort. **
+
+**WARNING: Using the Recalculate Sheet button will potentially overwrite values, including timestamps and uuids, with current/new ones. I've written in some rudimentary checking for timestamps and uuids, where it shouldn't overwrite previous entries (unless the cell should be cleared), but I wouldn't use the feature on any mission critical data entry. It is always better to edit something again in the row that needs fixing, recalculating should be a last resort.**
 
 ## 🤝 Contributing
 
